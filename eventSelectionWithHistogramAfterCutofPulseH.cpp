@@ -31,6 +31,7 @@ void CalculateMeanAndRMS(const vector<Double_t> &data, Double_t &mean, Double_t 
 }
 
 void processEvents(const char *fileName) {
+    // 1. FILE INPUT AND TREE SETUP
     TFile *file = TFile::Open(fileName);
     if (!file || file->IsZombie()) {
         cerr << "Error opening file: " << fileName << endl;
@@ -44,7 +45,7 @@ void processEvents(const char *fileName) {
         return;
     }
 
-    // Branch variables
+    // 2. BRANCH VARIABLES SETUP
     Int_t eventID;
     Int_t nSamples[23];
     Short_t adcVal[23][45];
@@ -64,7 +65,7 @@ void processEvents(const char *fileName) {
     tree->SetBranchAddress("nsTime", &nsTime);
     tree->SetBranchAddress("triggerBits", &triggerBits);
 
-    // 1. CALIBRATION PHASE
+    // 3. CALIBRATION PHASE
     TH1F *histArea[12];
     int pmtChannelMap[12] = {0,10,7,2,6,3,8,9,11,4,5,1};
     
@@ -95,69 +96,140 @@ void processEvents(const char *fileName) {
         Double_t histRMS = histArea[i]->GetRMS();
 
         fitFunc->SetParameters(
-            1000,               // par[0]
-            histMean - histRMS,  // par[1]
-            histRMS / 2,         // par[2]
-            1000,               // par[3]
-            histMean,           // par[4] (mu1)
-            histRMS,            // par[5]
-            500,                // par[6]
-            500                 // par[7]
+            1000,               // par[0]: Amplitude of the pedestal peak
+            histMean - histRMS, // par[1]: Mean of the pedestal peak
+            histRMS / 2,        // par[2]: Sigma of the pedestal peak
+            1000,               // par[3]: Amplitude of the 1PE peak
+            histMean,           // par[4]: Mean of the 1PE peak (mu1)
+            histRMS,            // par[5]: Sigma of the 1PE peak
+            500,                // par[6]: Amplitude of the 2PE peak
+            500                 // par[7]: Amplitude of the 3PE peak
         );
         histArea[i]->Fit(fitFunc, "Q0");
         mu1[i] = fitFunc->GetParameter(4);
         delete fitFunc;
     }
 
-    // Print calibration results with headers
-    cout << "\nCALIBRATION RESULTS (1PE peak positions):\n";
-    cout << "==========================================\n";
-    cout << "PMT#  HardwareCh  mu1 [ADC]\n";
-    cout << "---------------------------\n";
-    for (int i=0; i<12; i++) {
-        printf("PMT%02d     %2d       %6.2f\n", 
-              i+1, pmtChannelMap[i], mu1[i]);
+    // 4. EVENT SELECTION
+    vector<Long64_t> goodEvents, badEvents;
+    vector<Double_t> goodRMS, badRMS;
+
+    for (Long64_t entry=0; entry<nEntries; entry++) {
+        tree->GetEntry(entry);
+        bool isGood = false;
+        Double_t currentRMS;
+
+        // Condition A: Pulse Height > 2 p.e. for at least 3 PMTs
+        int countAbove2PE = 0;
+        for (int pmt=0; pmt<12; pmt++) {
+            if (pulseH[pmtChannelMap[pmt]] > 2 * mu1[pmt]) {
+                countAbove2PE++;
+            }
+        }
+
+        if (countAbove2PE >= 3) {
+            vector<Double_t> peakPositions;
+            for (int pmt=0; pmt<12; pmt++) {
+                if (pulseH[pmtChannelMap[pmt]] > 5.25) {
+                    peakPositions.push_back(peakPosition[pmtChannelMap[pmt]]);
+                }
+            }
+            if (peakPositions.size() > 0) {
+                Double_t dummyMean;
+                CalculateMeanAndRMS(peakPositions, dummyMean, currentRMS);
+                if (currentRMS < 2.5) isGood = true;
+            }
+        } 
+        else {
+            bool allPassConditionB = true;
+            for (int pmt=0; pmt<12; pmt++) {
+                int ch = pmtChannelMap[pmt];
+                if (pulseH[ch] <= 3 * baselineRMS[ch] || (area[ch] / pulseH[ch]) <= 1.2) {
+                    allPassConditionB = false;
+                    break;
+                }
+            }
+
+            if (allPassConditionB) {
+                vector<Double_t> peakPositions;
+                for (int pmt=0; pmt<12; pmt++) {
+                    if (pulseH[pmtChannelMap[pmt]] > 5.25) {
+                        peakPositions.push_back(peakPosition[pmtChannelMap[pmt]]);
+                    }
+                }
+                if (peakPositions.size() > 0) {
+                    Double_t dummyMean;
+                    CalculateMeanAndRMS(peakPositions, dummyMean, currentRMS);
+                    if (currentRMS < 2.5) isGood = true;
+                }
+            }
+        }
+
+        if (isGood) {
+            goodEvents.push_back(entry);
+            goodRMS.push_back(currentRMS);
+        } else {
+            badEvents.push_back(entry);
+            badRMS.push_back(currentRMS);
+        }
     }
-    cout << "==========================================\n\n";
 
-    // 2. EVENT SELECTION (same as before)
+    // 5. SAVE RESULTS
+    TFile *goodFile = new TFile(Form("./GoodEvents_%d.root", getpid()), "RECREATE");
+    TTree *goodTree = tree->CloneTree(0);
+    Double_t peakPosition_rms;
+    goodTree->Branch("peakPosition_rms", &peakPosition_rms, "peakPosition_rms/D");
 
-    // 3. PLOT PULSEH DISTRIBUTIONS
+    for (size_t i=0; i<goodEvents.size(); i++) {
+        tree->GetEntry(goodEvents[i]);
+        peakPosition_rms = goodRMS[i];
+        goodTree->Fill();
+    }
+    goodTree->Write();
+    delete goodFile;
+
+    TFile *badFile = new TFile(Form("./BadEvents_%d.root", getpid()), "RECREATE");
+    TTree *badTree = tree->CloneTree(0);
+    badTree->Branch("peakPosition_rms", &peakPosition_rms, "peakPosition_rms/D");
+
+    for (size_t i=0; i<badEvents.size(); i++) {
+        tree->GetEntry(badEvents[i]);
+        peakPosition_rms = badRMS[i];
+        badTree->Fill();
+    }
+    badTree->Write();
+    delete badFile;
+
+    // 6. CREATE COMPARISON PLOTS
     TFile *originalFile = TFile::Open(fileName);
     TTree *originalTree = (TTree*)originalFile->Get("tree");
-    TFile *goodFile = TFile::Open(Form("./GoodEvents_%d.root", getpid()));
-    TTree *goodTree = (TTree*)goodFile->Get("tree");
+    goodFile = TFile::Open(Form("./GoodEvents_%d.root", getpid()));
+    goodTree = (TTree*)goodFile->Get("tree");
 
     TH1F *histOriginal[12];
     TH1F *histGood[12];
 
-    // Initialize histograms for pulseH
     for(int pmt=0; pmt<12; pmt++) {
         histOriginal[pmt] = new TH1F(Form("PMT%d_Original",pmt+1),
-                                    Form("PMT %d;pulseH [ADC];Events",pmt+1), 
-                                    40, -10, 30);
-        
+                                    Form("PMT %d;ADC Counts;Events",pmt+1), 
+                                    200, -100, 900);
         histGood[pmt] = new TH1F(Form("PMT%d_Good",pmt+1),
-                                Form("PMT %d;pulseH [ADC];Events",pmt+1), 
-                                40, -10, 30);
+                                Form("PMT %d;ADC Counts;Events",pmt+1), 
+                                200, -100, 900);
         
-        // Fill original histograms
-        originalTree->Draw(Form("pulseH[%d] >> PMT%d_Original", 
+        originalTree->Draw(Form("pulseH> PMT%d_Original", 
                               pmtChannelMap[pmt], pmt+1), "");
-        // Fill good histograms
-        goodTree->Draw(Form("pulseH[%d] >> PMT%d_Good", 
+        goodTree->Draw(Form("pulseH>> PMT%d_Good", 
                           pmtChannelMap[pmt], pmt+1), "");
         
-        // Style settings
         histOriginal[pmt]->SetLineColor(kBlue);
         histGood[pmt]->SetLineColor(kRed);
-        histOriginal[pmt]->SetLineWidth(2);
-        histGood[pmt]->SetLineWidth(2);
+        histOriginal[pmt]->SetLineWidth(1);
+        histGood[pmt]->SetLineWidth(1);
     }
 
-    // Create combined canvas
     TCanvas *masterCanvas = new TCanvas("MasterCanvas", 
-                                       "PMT Pulse Height Distributions", 
+                                       " pulseH ", 
                                        3600, 3000);
     masterCanvas->Divide(3, 4, 0, 0);
 
@@ -177,22 +249,18 @@ void processEvents(const char *fileName) {
             TH1F *hOrig = histOriginal[pmtIndex];
             TH1F *hGood = histGood[pmtIndex];
             
-            // Set axis ranges
             double ymax = std::max(hOrig->GetMaximum(), hGood->GetMaximum()) * 1.2;
             hOrig->SetMaximum(ymax);
             
-            // Draw histograms
             hOrig->Draw("HIST");
             hGood->Draw("HIST SAME");
             
-            // Add legend
-            TLegend *leg = new TLegend(0.6, 0.7, 0.88, 0.88);
+            TLegend *leg = new TLegend(0.6, 0.7, 0.9, 0.9);
             leg->AddEntry(hOrig, "Original", "l");
             leg->AddEntry(hGood, "Good Events", "l");
             leg->SetBorderSize(0);
             leg->Draw();
             
-            // Style adjustments
             gPad->SetLeftMargin(0.15);
             gPad->SetRightMargin(0.05);
             gPad->SetBottomMargin(0.15);
@@ -206,9 +274,9 @@ void processEvents(const char *fileName) {
         }
     }
 
-    masterCanvas->SaveAs("PMT_PulseH_Comparison.png");
+    masterCanvas->SaveAs("PMT_ADC_Comparison.png");
 
-    // Cleanup
+    // 7. CLEANUP
     for(int pmt=0; pmt<12; pmt++) {
         delete histOriginal[pmt];
         delete histGood[pmt];
