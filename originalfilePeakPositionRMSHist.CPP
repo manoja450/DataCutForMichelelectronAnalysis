@@ -69,7 +69,7 @@ void plotPMTPeakRMS(const char* fileName) {
     }
 
     // Create histogram for event RMS values
-    TH1F* hRMS = new TH1F("hRMS", "Peak Position RMS Distribution;RMS (bins);Events", 
+    TH1F* hRMS = new TH1F("hRMS", "Peak Position RMS Distribution;RMS;Events", 
                            100, 0, 10); // 100 bins, range 0 to 10
 
     // Fill histogram with RMS values
@@ -108,13 +108,6 @@ void plotPMTPeakRMS(const char* fileName) {
     // Draw histogram
     hRMS->Draw("HIST");
 
-    // Add additional text (optional)
-    TLatex* text = new TLatex();
-    text->SetNDC(true); // Use normalized coordinates
-    text->SetTextSize(0.04);
-    text->SetTextColor(kBlack);
-    text->DrawLatex(0.15, 0.85, "Peak Position RMS Distribution");
-    text->DrawLatex(0.15, 0.80, "All PMTs, All Events");
 
     // Save the plot
     canvas->SaveAs("PeakPosition_RMS_Distribution.png");
@@ -122,7 +115,6 @@ void plotPMTPeakRMS(const char* fileName) {
     // Cleanup
     delete hRMS;
     delete canvas;
-    delete text;
     file->Close();
 
     cout << "Peak position RMS distribution plot saved as PeakPosition_RMS_Distribution.png" << endl;
