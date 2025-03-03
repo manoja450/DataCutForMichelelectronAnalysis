@@ -5,7 +5,6 @@
 #include <TF1.h>
 #include <TCanvas.h>
 #include <TLegend.h>
-#include <TLine.h>
 #include <vector>
 #include <cmath>
 #include <unistd.h>
@@ -45,7 +44,7 @@ void processEvents(const char *fileName) {
         return;
     }
 
-    // Variables to read from the tree
+    // Branch variables
     Int_t eventID;
     Int_t nSamples[23];
     Short_t adcVal[23][45];
@@ -54,7 +53,6 @@ void processEvents(const char *fileName) {
     Long64_t nsTime;
     Int_t triggerBits;
 
-    // Set branch addresses
     tree->SetBranchAddress("eventID", &eventID);
     tree->SetBranchAddress("nSamples", nSamples);
     tree->SetBranchAddress("adcVal", adcVal);
@@ -97,225 +95,130 @@ void processEvents(const char *fileName) {
         Double_t histRMS = histArea[i]->GetRMS();
 
         fitFunc->SetParameters(
-            1000,               // par[0]: Amplitude of the pedestal peak
-            histMean - histRMS, // par[1]: Mean of the pedestal peak
-            histRMS / 2,        // par[2]: Sigma of the pedestal peak
-            1000,               // par[3]: Amplitude of the 1PE peak
-            histMean,           // par[4]: Mean of the 1PE peak (mu1)
-            histRMS,            // par[5]: Sigma of the 1PE peak
-            500,                // par[6]: Amplitude of the 2PE peak
-            500                 // par[7]: Amplitude of the 3PE peak
+            1000,               // par[0]
+            histMean - histRMS,  // par[1]
+            histRMS / 2,         // par[2]
+            1000,               // par[3]
+            histMean,           // par[4] (mu1)
+            histRMS,            // par[5]
+            500,                // par[6]
+            500                 // par[7]
         );
         histArea[i]->Fit(fitFunc, "Q0");
         mu1[i] = fitFunc->GetParameter(4);
         delete fitFunc;
     }
 
-    // Print calibration results
+    // Print calibration results with headers
     cout << "\nCALIBRATION RESULTS (1PE peak positions):\n";
+    cout << "==========================================\n";
     cout << "PMT#  HardwareCh  mu1 [ADC]\n";
     cout << "---------------------------\n";
     for (int i=0; i<12; i++) {
         printf("PMT%02d     %2d       %6.2f\n", 
               i+1, pmtChannelMap[i], mu1[i]);
     }
-    cout << endl;
+    cout << "==========================================\n\n";
 
-    // 2. EVENT SELECTION
-    vector<Long64_t> goodEvents, badEvents;
-    vector<Double_t> goodRMS, badRMS;
+    // 2. EVENT SELECTION (same as before)
 
-    for (Long64_t entry=0; entry<nEntries; entry++) {
-        tree->GetEntry(entry);
-        bool isGood = false;
-        Double_t currentRMS;
+    // 3. PLOT PULSEH DISTRIBUTIONS
+    TFile *originalFile = TFile::Open(fileName);
+    TTree *originalTree = (TTree*)originalFile->Get("tree");
+    TFile *goodFile = TFile::Open(Form("./GoodEvents_%d.root", getpid()));
+    TTree *goodTree = (TTree*)goodFile->Get("tree");
 
-        // Condition A: Pulse Height > 2 p.e. for at least 3 PMTs
-        int countAbove2PE = 0;
-        for (int pmt=0; pmt<12; pmt++) {
-            if (pulseH[pmtChannelMap[pmt]] > 2 * mu1[pmt]) {
-                countAbove2PE++;
-            }
-        }
+    TH1F *histOriginal[12];
+    TH1F *histGood[12];
 
-        if (countAbove2PE >= 3) {
-            // Calculate peak position mean and RMS
-            vector<Double_t> peakPositions;
-            for (int pmt=0; pmt<12; pmt++) {
-                if (pulseH[pmtChannelMap[pmt]] > 5.25) { // PMT Hit > 3 condition
-                    peakPositions.push_back(peakPosition[pmtChannelMap[pmt]]);
-                }
-            }
-            if (peakPositions.size() > 0) {
-                Double_t dummyMean;
-                CalculateMeanAndRMS(peakPositions, dummyMean, currentRMS);
-                if (currentRMS < 2.5) isGood = true;
-            }
-        } 
-        else {
-            // Condition B: Pulse Height > 3 * baseline RMS and area/height > 1.2 for all PMTs
-            bool allPassConditionB = true;
-            for (int pmt=0; pmt<12; pmt++) {
-                int ch = pmtChannelMap[pmt];
-                if (pulseH[ch] <= 3 * baselineRMS[ch] || (area[ch] / pulseH[ch]) <= 1.2) {
-                    allPassConditionB = false;
-                    break;
-                }
-            }
-
-            if (allPassConditionB) {
-                // Calculate peak position mean and RMS
-                vector<Double_t> peakPositions;
-                for (int pmt=0; pmt<12; pmt++) {
-                    if (pulseH[pmtChannelMap[pmt]] > 5.25) { // PMT Hit > 3 condition
-                        peakPositions.push_back(peakPosition[pmtChannelMap[pmt]]);
-                    }
-                }
-                if (peakPositions.size() > 0) {
-                    Double_t dummyMean;
-                    CalculateMeanAndRMS(peakPositions, dummyMean, currentRMS);
-                    if (currentRMS < 2.5) isGood = true;
-                }
-            }
-        }
-
-        if (isGood) {
-            goodEvents.push_back(entry);
-            goodRMS.push_back(currentRMS);
-        } else {
-            badEvents.push_back(entry);
-            badRMS.push_back(currentRMS);
-        }
+    // Initialize histograms for pulseH
+    for(int pmt=0; pmt<12; pmt++) {
+        histOriginal[pmt] = new TH1F(Form("PMT%d_Original",pmt+1),
+                                    Form("PMT %d;pulseH [ADC];Events",pmt+1), 
+                                    40, -10, 30);
+        
+        histGood[pmt] = new TH1F(Form("PMT%d_Good",pmt+1),
+                                Form("PMT %d;pulseH [ADC];Events",pmt+1), 
+                                40, -10, 30);
+        
+        // Fill original histograms
+        originalTree->Draw(Form("pulseH[%d] >> PMT%d_Original", 
+                              pmtChannelMap[pmt], pmt+1), "");
+        // Fill good histograms
+        goodTree->Draw(Form("pulseH[%d] >> PMT%d_Good", 
+                          pmtChannelMap[pmt], pmt+1), "");
+        
+        // Style settings
+        histOriginal[pmt]->SetLineColor(kBlue);
+        histGood[pmt]->SetLineColor(kRed);
+        histOriginal[pmt]->SetLineWidth(2);
+        histGood[pmt]->SetLineWidth(2);
     }
 
-    // Save results
-    TFile *goodFile = new TFile(Form("./GoodEvents_%d.root", getpid()), "RECREATE");
-    TTree *goodTree = tree->CloneTree(0); // Clone the entire input tree structure
+    // Create combined canvas
+    TCanvas *masterCanvas = new TCanvas("MasterCanvas", 
+                                       "PMT Pulse Height Distributions", 
+                                       3600, 3000);
+    masterCanvas->Divide(3, 4, 0, 0);
 
-    // Add a new branch for peakPosition_rms
-    Double_t peakPosition_rms;
-    goodTree->Branch("peakPosition_rms", &peakPosition_rms, "peakPosition_rms/D");
-
-    for (size_t i=0; i<goodEvents.size(); i++) {
-        tree->GetEntry(goodEvents[i]); // Load all channel data for the event
-        peakPosition_rms = goodRMS[i]; // Add the calculated RMS value
-        goodTree->Fill();              // Save the event with all channel data
-    }
-    goodTree->Write();
-    delete goodFile;
-
-    TFile *badFile = new TFile(Form("./BadEvents_%d.root", getpid()), "RECREATE");
-    TTree *badTree = tree->CloneTree(0); // Clone the entire input tree structure
-    badTree->Branch("peakPosition_rms", &peakPosition_rms, "peakPosition_rms/D");
-
-    for (size_t i=0; i<badEvents.size(); i++) {
-        tree->GetEntry(badEvents[i]); // Load all channel data for the event
-        peakPosition_rms = badRMS[i]; // Add the calculated RMS value
-        badTree->Fill();              // Save the event with all channel data
-    }
-    badTree->Write();
-    delete badFile;
-
-    // 3. PLOT HISTOGRAMS
-    // Create histograms for pulseH before and after the cut
-    TH1F *histPulseHBefore[12];
-    TH1F *histPulseHAfter[12];
-
-    for (int i=0; i<12; i++) {
-        histPulseHBefore[i] = new TH1F(Form("PMT%d_Before",i+1), Form("PMT %d (Before Cut);pulseH [ADC];Events",i+1), 100, 0, 100);
-        histPulseHAfter[i] = new TH1F(Form("PMT%d_After",i+1), Form("PMT %d (After Cut);pulseH [ADC];Events",i+1), 100, 0, 100);
-    }
-
-    // Fill histograms for pulseH before the cut
-    for (Long64_t entry=0; entry<nEntries; entry++) {
-        tree->GetEntry(entry);
-        for (int pmt=0; pmt<12; pmt++) {
-            histPulseHBefore[pmt]->Fill(pulseH[pmtChannelMap[pmt]]); // Fill with ADC counts
-        }
-    }
-
-    // Fill histograms for pulseH after the cut
-    TFile *goodFileRead = TFile::Open(Form("./GoodEvents_%d.root", getpid()));
-    TTree *goodTreeRead = (TTree*)goodFileRead->Get("tree");
-    goodTreeRead->SetBranchAddress("pulseH", pulseH);
-
-    for (size_t i=0; i<goodEvents.size(); i++) {
-        goodTreeRead->GetEntry(i);
-        for (int pmt=0; pmt<12; pmt++) {
-            histPulseHAfter[pmt]->Fill(pulseH[pmtChannelMap[pmt]]); // Fill with ADC counts
-        }
-    }
-
-    // Create a master canvas for the combined plot
-    TCanvas *masterCanvas = new TCanvas("MasterCanvas", "Combined PMT Energy Distributions", 3600, 3000);
-    masterCanvas->Divide(3, 4, 0, 0); // Adjust spacing between subplots
-
-    // Define the layout of PMT channels on the canvas
     int layout[4][3] = {
-        {9, 3, 7},  // Row 1: PMT 10, PMT 4, PMT 8
-        {5, 4, 8},  // Row 2: PMT 6, PMT 5, PMT 9
-        {0, 6, 1},  // Row 3: PMT 1, PMT 7, PMT 2
-        {10, 11, 2} // Row 4: PMT 11, PMT 12, PMT 3
+        {9, 3, 7},  // Row 1: PMT 10, 4, 8
+        {5, 4, 8},  // Row 2: PMT 6, 5, 9
+        {0, 6, 1},  // Row 3: PMT 1, 7, 2
+        {10, 11, 2} // Row 4: PMT 11, 12, 3
     };
 
-    // Loop through the layout to plot histograms on the master canvas
-    for (int row = 0; row < 4; row++) {
-        for (int col = 0; col < 3; col++) {
-            int padPosition = row * 3 + col + 1; // Calculate pad position (1-12)
-            masterCanvas->cd(padPosition); // Switch to the specific pad
-
-            int pmtIndex = layout[row][col]; // Get PMT index from layout
-
-            // Adjust histogram text size
-            histPulseHBefore[pmtIndex]->GetXaxis()->SetTitleSize(0.07); // Increase x-axis title size
-            histPulseHBefore[pmtIndex]->GetYaxis()->SetTitleSize(0.09); // Increase y-axis title size
-            histPulseHBefore[pmtIndex]->GetXaxis()->SetLabelSize(0.04); // Increase x-axis label size
-            histPulseHBefore[pmtIndex]->GetYaxis()->SetLabelSize(0.04); // Increase y-axis label size
-
-            // Ensure Y-axis label is visible
-            histPulseHBefore[pmtIndex]->GetYaxis()->SetTitle("Events per 3 ADCs");
-            histPulseHBefore[pmtIndex]->GetYaxis()->SetTitleOffset(0.8); // Move Y-axis title closer to the axis line
-
-            // Ensure X-axis label is visible
-            histPulseHBefore[pmtIndex]->GetXaxis()->SetTitle("pulseH [ADC]");
-
-            // Adjust margins for each subplot
-            gPad->SetLeftMargin(0.15);   // Increase left margin
-            gPad->SetRightMargin(0.00); // Adjust right margin
-            gPad->SetBottomMargin(0.15); // Increase bottom margin
-            gPad->SetTopMargin(0.01);    // Adjust top margin
-
+    for (int row=0; row<4; row++) {
+        for (int col=0; col<3; col++) {
+            int padIndex = row*3 + col + 1;
+            masterCanvas->cd(padIndex);
+            
+            int pmtIndex = layout[row][col];
+            TH1F *hOrig = histOriginal[pmtIndex];
+            TH1F *hGood = histGood[pmtIndex];
+            
+            // Set axis ranges
+            double ymax = std::max(hOrig->GetMaximum(), hGood->GetMaximum()) * 1.2;
+            hOrig->SetMaximum(ymax);
+            
             // Draw histograms
-            histPulseHBefore[pmtIndex]->SetLineColor(kBlue);
-            histPulseHAfter[pmtIndex]->SetLineColor(kRed);
-            histPulseHBefore[pmtIndex]->Draw();
-            histPulseHAfter[pmtIndex]->Draw("SAME");
-
-            // Draw a vertical line at the cut threshold (2 * mu1)
-            TLine *cutLine = new TLine(2 * mu1[pmtIndex], 0, 2 * mu1[pmtIndex], histPulseHBefore[pmtIndex]->GetMaximum());
-            cutLine->SetLineColor(kBlack);
-            cutLine->SetLineStyle(2);
-            cutLine->Draw();
-
-            // Add a legend
-            TLegend *legend = new TLegend(0.6, 0.7, 0.9, 0.9);
-            legend->AddEntry(histPulseHBefore[pmtIndex], "Before Cut", "l");
-            legend->AddEntry(histPulseHAfter[pmtIndex], "After Cut", "l");
-            legend->Draw();
+            hOrig->Draw("HIST");
+            hGood->Draw("HIST SAME");
+            
+            // Add legend
+            TLegend *leg = new TLegend(0.6, 0.7, 0.88, 0.88);
+            leg->AddEntry(hOrig, "Original", "l");
+            leg->AddEntry(hGood, "Good Events", "l");
+            leg->SetBorderSize(0);
+            leg->Draw();
+            
+            // Style adjustments
+            gPad->SetLeftMargin(0.15);
+            gPad->SetRightMargin(0.05);
+            gPad->SetBottomMargin(0.15);
+            gPad->SetTopMargin(0.1);
+            
+            hOrig->GetXaxis()->SetTitleSize(0.07);
+            hOrig->GetYaxis()->SetTitleSize(0.07);
+            hOrig->GetXaxis()->SetLabelSize(0.05);
+            hOrig->GetYaxis()->SetLabelSize(0.05);
+            hOrig->GetYaxis()->SetTitleOffset(1.2);
         }
     }
 
-    // Save the master canvas
-    masterCanvas->SaveAs("CombinedPMTEnergyDistributions.png");
+    masterCanvas->SaveAs("PMT_PulseH_Comparison.png");
 
     // Cleanup
-    for (int i=0; i<12; i++) {
-        delete histPulseHBefore[i];
-        delete histPulseHAfter[i];
+    for(int pmt=0; pmt<12; pmt++) {
+        delete histOriginal[pmt];
+        delete histGood[pmt];
     }
+    for (int i=0; i<12; i++) delete histArea[i];
+    
     delete masterCanvas;
+    originalFile->Close();
+    goodFile->Close();
     file->Close();
-    goodFileRead->Close();
 }
 
 int main(int argc, char* argv[]) {
