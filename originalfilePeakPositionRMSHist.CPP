@@ -8,28 +8,33 @@
 #include <TCanvas.h>
 #include <TLatex.h>
 #include <algorithm> // For max_element
+#include <cmath>     // For sqrt, ceil, isnan, isinf
 
 using namespace std;
 
-// PMT to ADC channel mapping from your code
-const int pmtChannelMap[12] = {0,10,7,2,6,3,8,9,11,4,5,1};
+// PMT to ADC channel mapping
+const int pmtChannelMap[12] = {0, 10, 7, 2, 6, 3, 8, 9, 11, 4, 5, 1};
 
+// Function to calculate RMS
 void CalculateRMS(const vector<double>& positions, double& rms) {
-    if(positions.size() < 2) {
+    if (positions.size() < 2) {
         rms = -1;
         return;
     }
-    
+
     double sum = 0.0, sumSq = 0.0;
-    for(const auto& pos : positions) {
+    for (const auto& pos : positions) {
         sum += pos;
         sumSq += pos * pos;
     }
-    
-    const double mean = sum/positions.size();
-    rms = sqrt((sumSq/positions.size()) - (mean*mean));
+
+    const double mean = sum / positions.size();
+    double variance = (sumSq / positions.size()) - (mean * mean);
+    if (variance < 0) variance = 0; // Handle precision issues
+    rms = sqrt(variance);
 }
 
+// Main function to plot PMT peak RMS
 void plotPMTPeakRMS(const char* fileName) {
     TFile* file = TFile::Open(fileName);
     if (!file || file->IsZombie()) {
@@ -50,37 +55,79 @@ void plotPMTPeakRMS(const char* fileName) {
 
     vector<double> eventRMS;
     const Long64_t nEntries = tree->GetEntries();
-    
+
+    // Debugging counters
+    int excludedRange = 0;      // Excluded due to peakPosition outside [20, 44]
+    int excludedPMTs = 0;       // Excluded due to fewer than 2 valid PMTs
+    int excludedRMS = 0;        // Excluded due to invalid RMS (< 0)
+    int excludedNaN = 0;        // Excluded due to NaN peakPosition
+    int excludedInf = 0;        // Excluded due to Inf peakPosition
+
     // Event processing
-    for(Long64_t entry = 0; entry < nEntries; entry++) {
+    for (Long64_t entry = 0; entry < nEntries; entry++) {
         tree->GetEntry(entry);
-        
+
         vector<double> validPositions;
-        for(int pmt = 0; pmt < 12; pmt++) {
+        for (int pmt = 0; pmt < 12; pmt++) {
             const int ch = pmtChannelMap[pmt];
-            
-            // Basic validity check (20-44 bins from original code)
-            if(peakPosition[ch] >= 20 && peakPosition[ch] <= 44) {
+
+            // Check for NaN or Inf
+            if (isnan(peakPosition[ch])) {
+                excludedNaN++;
+                continue;
+            }
+            if (isinf(peakPosition[ch])) {
+                excludedInf++;
+                continue;
+            }
+
+            // Check for valid range
+            if (peakPosition[ch] >= 20 && peakPosition[ch] <= 44) {
                 validPositions.push_back(peakPosition[ch]);
+            } else {
+                excludedRange++;
             }
         }
-        
+
+        // Check for sufficient valid PMTs
+        if (validPositions.size() < 2) {
+            excludedPMTs++;
+            continue;
+        }
+
+        // Calculate RMS
         double rms;
         CalculateRMS(validPositions, rms);
-        if(rms > 0) eventRMS.push_back(rms);
+        if (rms < 0) { // Only exclude if RMS is negative
+            excludedRMS++;
+            continue;
+        }
+
+        // Store valid RMS (including RMS = 0)
+        eventRMS.push_back(rms);
     }
 
+    // Print debugging information
+    cout << "Total entries: " << nEntries << endl;
+    cout << "Excluded due to range [20, 44]: " << excludedRange << endl;
+    cout << "Excluded due to NaN peakPosition: " << excludedNaN << endl;
+    cout << "Excluded due to Inf peakPosition: " << excludedInf << endl;
+    cout << "Excluded due to fewer than 2 valid PMTs: " << excludedPMTs << endl;
+    cout << "Excluded due to invalid RMS (< 0): " << excludedRMS << endl;
+    cout << "Valid events with RMS (including RMS = 0): " << eventRMS.size() << endl;
+
     // Create histogram
-    if(eventRMS.empty()) {
+    if (eventRMS.empty()) {
         cerr << "No valid RMS values found!" << endl;
         return;
     }
-    
+
     const double maxRMS = *max_element(eventRMS.begin(), eventRMS.end());
-    TH1F* hRMS = new TH1F("hRMS", "PMT Peak Position RMS Distribution;RMS (bins);Events",
-                          int(maxRMS*2), 0, ceil(maxRMS*1.1));
-    
-    for(const auto& rms : eventRMS) {
+    const int numBins = 100; // Fixed number of bins
+    TH1F* hRMS = new TH1F("hRMS", "Peak Position RMS Distribution before Cut; peakPosition_RMS); Events",
+                          numBins, 0, ceil(maxRMS * 1.1));
+
+    for (const auto& rms : eventRMS) {
         hRMS->Fill(rms);
     }
 
@@ -89,12 +136,8 @@ void plotPMTPeakRMS(const char* fileName) {
     hRMS->SetFillColor(kBlue);
     hRMS->SetFillStyle(3003);
     hRMS->Draw("HIST");
-    
-    TLatex tex;
-    tex.SetNDC(true);
-    tex.DrawLatex(0.15, 0.85, Form("Mean RMS: %.2f", hRMS->GetMean()));
-    tex.DrawLatex(0.15, 0.80, Form("Entries: %d", hRMS->GetEntries()));
-    
+
+
     c->SaveAs("pmt_peak_rms.png");
 
     // Cleanup
@@ -104,7 +147,7 @@ void plotPMTPeakRMS(const char* fileName) {
 }
 
 int main(int argc, char* argv[]) {
-    if(argc != 2) {
+    if (argc != 2) {
         cerr << "Usage: " << argv[0] << " <input.root>" << endl;
         return 1;
     }
