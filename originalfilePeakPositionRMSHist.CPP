@@ -1,131 +1,112 @@
+//This code calculates the peak Position RMS of each event and plot the histogram of peak position RMS (of PMTs only). 
 #include <iostream>
+#include <vector>
 #include <TFile.h>
 #include <TTree.h>
 #include <TH1F.h>
 #include <TCanvas.h>
-#include <cmath>
-#include <vector>
-#include "TStyle.h"
-#include "TLatex.h"
+#include <TLatex.h>
+#include <algorithm> // For max_element
 
 using namespace std;
 
+// PMT to ADC channel mapping from your code
+const int pmtChannelMap[12] = {0,10,7,2,6,3,8,9,11,4,5,1};
+
+void CalculateRMS(const vector<double>& positions, double& rms) {
+    if(positions.size() < 2) {
+        rms = -1;
+        return;
+    }
+    
+    double sum = 0.0, sumSq = 0.0;
+    for(const auto& pos : positions) {
+        sum += pos;
+        sumSq += pos * pos;
+    }
+    
+    const double mean = sum/positions.size();
+    rms = sqrt((sumSq/positions.size()) - (mean*mean));
+}
+
 void plotPMTPeakRMS(const char* fileName) {
-    // Open the ROOT file
     TFile* file = TFile::Open(fileName);
     if (!file || file->IsZombie()) {
         cerr << "Error opening file: " << fileName << endl;
         return;
     }
 
-    // Access the TTree
     TTree* tree = (TTree*)file->Get("tree");
     if (!tree) {
-        cerr << "Error accessing TTree 'tree'!" << endl;
+        cerr << "Error accessing TTree!" << endl;
         file->Close();
         return;
     }
 
-    // Declare tree variables
+    // Setup input branches
     Int_t peakPosition[23];
-    
-    // Set branch addresses
     tree->SetBranchAddress("peakPosition", peakPosition);
 
-    // PMT channel mapping
-    int pmtChannelMap[12] = {0, 10, 7, 2, 6, 3, 8, 9, 11, 4, 5, 1};
-
-    // Vector to store RMS values for each event
     vector<double> eventRMS;
-
-    // Process all events
-    Long64_t nEntries = tree->GetEntries();
-    for (Long64_t entry = 0; entry < nEntries; entry++) {
+    const Long64_t nEntries = tree->GetEntries();
+    
+    // Event processing
+    for(Long64_t entry = 0; entry < nEntries; entry++) {
         tree->GetEntry(entry);
-
-        // Collect peak positions for all PMTs in this event
-        vector<double> peakPositions;
-        for (int pmt = 0; pmt < 12; pmt++) {
-            int adcChannel = pmtChannelMap[pmt];
-            int pos = peakPosition[adcChannel];
+        
+        vector<double> validPositions;
+        for(int pmt = 0; pmt < 12; pmt++) {
+            const int ch = pmtChannelMap[pmt];
             
-            // Skip invalid positions (20-44 bins valid range)
-            if (pos < 20 || pos > 44) continue;
-
-            peakPositions.push_back(pos);
-        }
-
-        // Calculate RMS for this event
-        if (peakPositions.size() > 1) {  // Require at least 2 PMTs for RMS calculation
-            double sum = 0, sumSq = 0;
-            for (double pos : peakPositions) {
-                sum += pos;
-                sumSq += pos * pos;
+            // Basic validity check (20-44 bins from original code)
+            if(peakPosition[ch] >= 20 && peakPosition[ch] <= 44) {
+                validPositions.push_back(peakPosition[ch]);
             }
-            double mean = sum / peakPositions.size();
-            double rms = sqrt((sumSq / peakPositions.size()) - (mean * mean));
-            eventRMS.push_back(rms);
         }
+        
+        double rms;
+        CalculateRMS(validPositions, rms);
+        if(rms > 0) eventRMS.push_back(rms);
     }
 
-    // Create histogram for event RMS values
-    TH1F* hRMS = new TH1F("hRMS", "Peak Position RMS Distribution;RMS;Events", 
-                           100, 0, 10); // 100 bins, range 0 to 10
-
-    // Fill histogram with RMS values
-    for (double rms : eventRMS) {
+    // Create histogram
+    if(eventRMS.empty()) {
+        cerr << "No valid RMS values found!" << endl;
+        return;
+    }
+    
+    const double maxRMS = *max_element(eventRMS.begin(), eventRMS.end());
+    TH1F* hRMS = new TH1F("hRMS", "PMT Peak Position RMS Distribution;RMS (bins);Events",
+                          int(maxRMS*2), 0, ceil(maxRMS*1.1));
+    
+    for(const auto& rms : eventRMS) {
         hRMS->Fill(rms);
     }
 
-    // Customize ROOT style
-    gStyle->SetOptStat(1111); // Enable default statistics box
-    gStyle->SetTitleFont(42, "XYZ"); // Set font for axis titles
-    gStyle->SetLabelFont(42, "XYZ"); // Set font for axis labels
-    gStyle->SetTitleSize(0.05, "XYZ"); // Set title size
-    gStyle->SetLabelSize(0.04, "XYZ"); // Set label size
-    gStyle->SetPadLeftMargin(0.12); // Increase left margin
-    gStyle->SetPadRightMargin(0.05); // Adjust right margin
-    gStyle->SetPadBottomMargin(0.12); // Increase bottom margin
-    gStyle->SetPadTopMargin(0.08); // Adjust top margin
-    gStyle->SetGridColor(kGray); // Set grid color
-    gStyle->SetGridStyle(2); // Set grid style (dashed lines)
-
-    // Create and configure canvas
-    TCanvas* canvas = new TCanvas("canvas", "Peak Position RMS", 1200, 800);
-    canvas->SetGridx(); // Enable vertical grid lines
-    canvas->SetGridy(); // Enable horizontal grid lines
-
-    // Customize histogram
-    hRMS->SetLineColor(kBlue);
-    hRMS->SetLineWidth(2);
+    // Draw and save
+    TCanvas* c = new TCanvas("c", "RMS Distribution", 800, 600);
     hRMS->SetFillColor(kBlue);
-    hRMS->SetFillStyle(3003); // Semi-transparent fill
-    hRMS->GetXaxis()->CenterTitle(true);
-    hRMS->GetYaxis()->CenterTitle(true);
-    hRMS->GetXaxis()->SetTitleOffset(1.1); // Adjust title offset
-    hRMS->GetYaxis()->SetTitleOffset(1.3); // Adjust title offset
-
-    // Draw histogram
+    hRMS->SetFillStyle(3003);
     hRMS->Draw("HIST");
-
-
-    // Save the plot
-    canvas->SaveAs("PeakPosition_RMS_Distribution.png");
+    
+    TLatex tex;
+    tex.SetNDC(true);
+    tex.DrawLatex(0.15, 0.85, Form("Mean RMS: %.2f", hRMS->GetMean()));
+    tex.DrawLatex(0.15, 0.80, Form("Entries: %d", hRMS->GetEntries()));
+    
+    c->SaveAs("pmt_peak_rms.png");
 
     // Cleanup
     delete hRMS;
-    delete canvas;
+    delete c;
     file->Close();
-
-    cout << "Peak position RMS distribution plot saved as PeakPosition_RMS_Distribution.png" << endl;
 }
 
 int main(int argc, char* argv[]) {
-    if (argc != 2) {
-        cerr << "Usage: " << argv[0] << " <root_file>" << endl;
+    if(argc != 2) {
+        cerr << "Usage: " << argv[0] << " <input.root>" << endl;
         return 1;
     }
-
     plotPMTPeakRMS(argv[1]);
     return 0;
 }
