@@ -1,4 +1,5 @@
-//This code calculates the peak Position RMS of each event and plot the histogram of peak position RMS (of PMTs only). 
+//This code calculates each event's peak Position RMS and plots the histogram of peak position RMS (of PMTs only). 
+// This code is needed to see the distribution of peak position before the cut, i.e, the distribution of original data.
 #include <iostream>
 #include <vector>
 #include <TFile.h>
