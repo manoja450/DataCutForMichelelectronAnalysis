@@ -1,95 +1,89 @@
 //This code gives the histogram of peakPosition_rms of the data after the applied cut. The data after cut applied is stored in a new root file, which contains an additional branch  peakPosition_rms.
-#include <iostream>
 #include <TFile.h>
 #include <TTree.h>
-#include <TH1F.h>
+#include <TH1D.h>
 #include <TCanvas.h>
-#include <TLatex.h>
-#include <climits>
+#include <TStyle.h>
+#include <iostream>
+#include <cmath> // For std::max
 
-void plotPPRMS(const char* fileName) {
-    // Open ROOT file
+void plot_peakPosition_rms_curve(const char* fileName) {
+    // Open the ROOT file
     TFile* file = TFile::Open(fileName);
     if (!file || file->IsZombie()) {
-        std::cerr << "Error opening file: " << fileName << std::endl;
+        std::cerr << "Error: Could not open file " << fileName << std::endl;
         return;
     }
 
-    // Access TTree
+    // Access the TTree
     TTree* tree = (TTree*)file->Get("tree");
     if (!tree) {
-        std::cerr << "Error accessing TTree!" << std::endl;
+        std::cerr << "Error: Could not access TTree 'tree'!" << std::endl;
         file->Close();
         return;
     }
 
     // Set up branch access
-    Double_t pprms;
-    tree->SetBranchAddress("peakPosition_rms", &pprms);
+    Double_t peakPosition_rms;
+    tree->SetBranchAddress("peakPosition_rms", &peakPosition_rms);
 
-    // Find data range and maximum value
-    Double_t maxVal = -DBL_MAX;
-    Double_t minVal = DBL_MAX;
+    // Variables to track maximum value
+    Double_t maxPPRMS = -1.0;
+
+    // First pass: Find the maximum value
     const Long64_t nEntries = tree->GetEntries();
-    
     for (Long64_t i = 0; i < nEntries; i++) {
         tree->GetEntry(i);
-        if (pprms > maxVal) maxVal = pprms;
-        if (pprms < minVal) minVal = pprms;
+        maxPPRMS = std::max(maxPPRMS, peakPosition_rms); // Update maximum value
     }
 
-    // Handle edge cases
-    if (maxVal == -DBL_MAX) {
-        std::cerr << "No valid ppRMS values found!" << std::endl;
+    // Print the maximum value of peakPosition_rms
+    std::cout << "Maximum peakPosition_rms: " << maxPPRMS << std::endl;
+
+    // Create a histogram with fixed x-axis range (0 to 10)
+    const int nBins = 100;
+    TH1D* hist = new TH1D("hist", "Peak Position RMS Distribution;Peak Position RMS;Counts", nBins, 0, 10);
+
+    // Second pass: Fill the histogram
+    for (Long64_t i = 0; i < nEntries; i++) {
+        tree->GetEntry(i);
+        hist->Fill(peakPosition_rms); // Include all values, including zero
+    }
+
+    // Check if histogram has entries
+    if (hist->GetEntries() == 0) {
+        std::cerr << "Error: No entries found in the histogram!" << std::endl;
+        delete hist;
         file->Close();
         return;
     }
 
-    // Create histogram with dynamic range
-    const int bins = 100;
-    TH1F* h = new TH1F("h", "Peak Position RMS Distribution;ppRMS [bins];Events",
-                       bins, minVal, maxVal * 1.05);  // 5% headroom
-
-    // Fill histogram
-    for (Long64_t i = 0; i < nEntries; i++) {
-        tree->GetEntry(i);
-        h->Fill(pprms);
-    }
-
     // Create and configure canvas
-    TCanvas* c = new TCanvas("c", "ppRMS Distribution", 1200, 800);
-    c->SetGrid();
-    
-    // Customize histogram appearance
-    h->SetLineColor(kBlue);
-    h->SetLineWidth(2);
-    h->SetFillStyle(3003);
-    h->SetFillColor(kBlue);
-    h->Draw("HIST");  // Histogram step drawing
+    TCanvas* canvas = new TCanvas("canvas", "Peak Position RMS", 800, 600);
+    canvas->SetGrid();
 
-    // Add annotations
-    TLatex tex;
-    tex.SetNDC(true);
-    tex.SetTextSize(0.04);
-    tex.DrawLatex(0.15, 0.88, Form("File: %s", fileName));
-    tex.DrawLatex(0.15, 0.83, Form("Entries: %lld", nEntries));
-    tex.DrawLatex(0.15, 0.78, Form("Maximum ppRMS: %.2f", maxVal));
-    tex.DrawLatex(0.15, 0.73, Form("Mean: %.2f", h->GetMean()));
+    // Enable statistics box
+    gStyle->SetOptStat(1111); // Show entries, mean, and RMS
+    hist->SetStats(1);        // Ensure statistics box is enabled
 
-    // Save and clean up
-    c->SaveAs("pprms_distribution.png");
-    std::cout << "Maximum ppRMS value: " << maxVal << std::endl;
+    // Draw the histogram with default color
+    hist->Draw("HIST");
 
-    delete h;
-    delete c;
+    // Save the plot
+    canvas->SaveAs("peakPosition_rms_histogram.png");
+
+    // Clean up
+    delete canvas;
+    delete hist;
     file->Close();
 }
 
 int main(int argc, char* argv[]) {
-    if (argc != 2) {
-        std::cerr << "Usage: " << argv[0] << " <input.root>" << std::endl;
+    if (argc < 2) {
+        std::cerr << "Usage: " << argv[0] << " <input_file.root>" << std::endl;
         return 1;
     }
-    plotPPRMS(argv[1]);
+
+    plot_peakPosition_rms_curve(argv[1]);
     return 0;
 }
