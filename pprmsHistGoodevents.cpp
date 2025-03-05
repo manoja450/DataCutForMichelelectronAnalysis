@@ -30,24 +30,16 @@ void plot_peakPosition_rms_curve(const char* fileName) {
     // Variables to track maximum value
     Double_t maxPPRMS = -1.0;
 
-    // First pass: Find the maximum value
+    // Create a histogram with fixed x-axis range (0 to 10)
+    const int nBins = 100;
+    TH1D* hist = new TH1D("hist", "Peak Position RMS Distribution After Cut;Peak Position RMS;Counts", nBins, 0, 10);
+
+    // Fill the histogram and track the maximum value
     const Long64_t nEntries = tree->GetEntries();
     for (Long64_t i = 0; i < nEntries; i++) {
         tree->GetEntry(i);
-        maxPPRMS = std::max(maxPPRMS, peakPosition_rms); // Update maximum value
-    }
-
-    // Print the maximum value of peakPosition_rms
-    std::cout << "Maximum peakPosition_rms: " << maxPPRMS << std::endl;
-
-    // Create a histogram with fixed x-axis range (0 to 10)
-    const int nBins = 100;
-    TH1D* hist = new TH1D("hist", "Peak Position RMS Distribution;Peak Position RMS;Counts", nBins, 0, 10);
-
-    // Second pass: Fill the histogram
-    for (Long64_t i = 0; i < nEntries; i++) {
-        tree->GetEntry(i);
-        hist->Fill(peakPosition_rms); // Include all values, including zero
+        hist->Fill(peakPosition_rms); // Fill the histogram
+        maxPPRMS = std::max(maxPPRMS, peakPosition_rms); // Track maximum value
     }
 
     // Check if histogram has entries
@@ -58,6 +50,9 @@ void plot_peakPosition_rms_curve(const char* fileName) {
         return;
     }
 
+    // Print the maximum value of peakPosition_rms
+    std::cout << "Maximum peakPosition_rms: " << maxPPRMS << std::endl;
+
     // Create and configure canvas
     TCanvas* canvas = new TCanvas("canvas", "Peak Position RMS", 800, 600);
     canvas->SetGrid();
@@ -66,7 +61,20 @@ void plot_peakPosition_rms_curve(const char* fileName) {
     gStyle->SetOptStat(1111); // Show entries, mean, and RMS
     hist->SetStats(1);        // Ensure statistics box is enabled
 
-    // Draw the histogram with default color
+    // Increase axis text size
+    hist->GetXaxis()->SetLabelSize(0.04); // Increase x-axis label size
+    hist->GetXaxis()->SetTitleSize(0.04); // Increase x-axis title size
+    hist->GetYaxis()->SetLabelSize(0.04); // Increase y-axis label size
+    hist->GetYaxis()->SetTitleSize(0.04); // Increase y-axis title size
+
+    // Customize histogram appearance
+    hist->SetFillColor(kBlue);
+    hist->SetFillStyle(3003); // Semi-transparent fill
+
+    // Explicitly set the x-axis range to ensure all data is visible
+    hist->GetXaxis()->SetRangeUser(0, 10); // Ensure the range is 0 to 10
+
+    // Draw the histogram
     hist->Draw("HIST");
 
     // Save the plot
