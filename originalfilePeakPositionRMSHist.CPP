@@ -125,7 +125,7 @@ void plotPMTPeakRMS(const char* fileName) {
     const double maxRMS = *max_element(eventRMS.begin(), eventRMS.end());
     const int numBins = 100; // Fixed number of bins
     TH1F* hRMS = new TH1F("hRMS", "Peak Position RMS Distribution before Cut; peakPosition RMS; Events",
-                          numBins, 0, ceil(maxRMS * 1.1));
+                          numBins, 0, 10);
 
     for (const auto& rms : eventRMS) {
         hRMS->Fill(rms);
