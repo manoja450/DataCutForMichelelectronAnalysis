@@ -1,5 +1,5 @@
 //This code calculates each event's peak Position RMS and plots the histogram of peak position RMS (of PMTs only). 
-// This code is needed to see the distribution of peak position before the cut, i.e, the original data distribution.
+// This code is needed to see the distribution of peak position before the cut, i.e, the distribution of original data.
 #include <iostream>
 #include <vector>
 #include <TFile.h>
@@ -125,7 +125,7 @@ void plotPMTPeakRMS(const char* fileName) {
     const double maxRMS = *max_element(eventRMS.begin(), eventRMS.end());
     const int numBins = 100; // Fixed number of bins
     TH1F* hRMS = new TH1F("hRMS", "Peak Position RMS Distribution before Cut; peakPosition RMS; Events",
-                          numBins, 0, 12);
+                          numBins, 0, ceil(maxRMS * 1.1));
 
     for (const auto& rms : eventRMS) {
         hRMS->Fill(rms);
