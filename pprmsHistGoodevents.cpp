@@ -32,7 +32,7 @@ void plot_peakPosition_rms_curve(const char* fileName) {
 
     // Create a histogram with fixed x-axis range (0 to 10)
     const int nBins = 100;
-    TH1D* hist = new TH1D("hist", "Peak Position RMS Distribution After Cut;Peak Position RMS;Counts", nBins, 0, 10);
+    TH1D* hist = new TH1D("hist", "Peak Position RMS Distribution After Cut;Peak Position RMS;Events/0.1 RMS", nBins, 0, 10);
 
     // Fill the histogram and track the maximum value
     const Long64_t nEntries = tree->GetEntries();
@@ -65,7 +65,7 @@ void plot_peakPosition_rms_curve(const char* fileName) {
     hist->GetXaxis()->SetLabelSize(0.04); // Increase x-axis label size
     hist->GetXaxis()->SetTitleSize(0.04); // Increase x-axis title size
     hist->GetYaxis()->SetLabelSize(0.04); // Increase y-axis label size
-    hist->GetYaxis()->SetTitleSize(0.04); // Increase y-axis title size
+    hist->GetYaxis()->SetTitleSize(0.05); // Increase y-axis title size
 
     // Customize histogram appearance
     hist->SetFillColor(kBlue);
