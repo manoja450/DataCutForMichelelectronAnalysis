@@ -1,3 +1,5 @@
+//This code is designed to select data for Michel electron analysis. It applies a series of cuts to remove afterpulsing events. 
+//After applying the cut it stores the good data in a new root file inside the unique directory, with an additional branch for peakPosition_rms.
 #include <iostream>
 #include <TFile.h>
 #include <TTree.h>
@@ -6,6 +8,7 @@
 #include <vector>
 #include <cmath>
 #include <unistd.h>
+#include <sys/stat.h> // For mkdir
 
 using namespace std;
 
@@ -31,6 +34,15 @@ void CalculateMeanAndRMS(const vector<Double_t> &data, Double_t &mean, Double_t 
 
 // Main function to process events
 void processEvents(const char *fileName) {
+    // Extract the base name of the input file (without the .root extension)
+    string inputFileName(fileName);
+    size_t lastDot = inputFileName.find_last_of(".");
+    string baseName = inputFileName.substr(0, lastDot);
+
+    // Create a directory for output files
+    string outputDir = baseName + "_Output";
+    mkdir(outputDir.c_str(), 0777); // Create the directory
+
     // Open the input ROOT file
     TFile *file = TFile::Open(fileName);
     if (!file || file->IsZombie()) {
@@ -192,7 +204,8 @@ void processEvents(const char *fileName) {
     }
 
     // Save results
-    TFile *goodFile = new TFile(Form("./GoodEvents_%d.root", getpid()), "RECREATE");
+    string goodFilePath = outputDir + "/GoodEvents_" + baseName + ".root";
+    TFile *goodFile = new TFile(goodFilePath.c_str(), "RECREATE");
     TTree *goodTree = tree->CloneTree(0); // Clone the input tree structure
     Double_t peakPosition_rms;
     goodTree->Branch("peakPosition_rms", &peakPosition_rms, "peakPosition_rms/D");
@@ -205,7 +218,8 @@ void processEvents(const char *fileName) {
     goodTree->Write();
     delete goodFile;
 
-    TFile *badFile = new TFile(Form("./BadEvents_%d.root", getpid()), "RECREATE");
+    string badFilePath = outputDir + "/BadEvents_" + baseName + ".root";
+    TFile *badFile = new TFile(badFilePath.c_str(), "RECREATE");
     TTree *badTree = tree->CloneTree(0); // Clone the input tree structure
     badTree->Branch("peakPosition_rms", &peakPosition_rms, "peakPosition_rms/D");
 
