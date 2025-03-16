@@ -1,3 +1,6 @@
+//This code Do event Selection on YES Part after this cut criteria:Pulse Height > 2 p.e.? for at least 3 PMTs. 
+// It search for events Select only events with pp_rms <2.5.
+//  And stores event satisfying this criteria(only second criteria )  to GOOD evnts and not satisfying this to BAD events, with additional branch pewkposition_rms.
 #include <iostream>
 #include <TFile.h>
 #include <TTree.h>
@@ -128,6 +131,7 @@ void processEvents(const char *fileName) {
 
     // Step 4: Event Selection Phase
     vector<Long64_t> goodEvents, badEvents;
+    vector<Double_t> goodRMS, badRMS;
 
     // Loop over all events for selection
     for (Long64_t entry = 0; entry < nEntries; entry++) {
@@ -154,8 +158,10 @@ void processEvents(const char *fileName) {
             // Check if RMS < 2.5
             if (rmsPos < 2.5) {
                 goodEvents.push_back(entry); // Add to GOOD events
+                goodRMS.push_back(rmsPos);   // Store RMS for GOOD events
             } else {
-                badEvents.push_back(entry); // Add to BAD events
+                badEvents.push_back(entry);  // Add to BAD events
+                badRMS.push_back(rmsPos);   // Store RMS for BAD events
             }
         }
     }
@@ -169,9 +175,15 @@ void processEvents(const char *fileName) {
     string goodFilePath = outputDir + "/GoodEvents.root";
     TFile *goodFile = new TFile(goodFilePath.c_str(), "RECREATE");
     TTree *goodTree = tree->CloneTree(0); // Clone the input tree structure
-    for (const auto &entry : goodEvents) {
-        tree->GetEntry(entry);
-        goodTree->Fill();
+
+    // Add a new branch for peakPosition_rms
+    Double_t peakPosition_rms;
+    goodTree->Branch("peakPosition_rms", &peakPosition_rms, "peakPosition_rms/D");
+
+    for (size_t i = 0; i < goodEvents.size(); i++) {
+        tree->GetEntry(goodEvents[i]); // Load event data
+        peakPosition_rms = goodRMS[i]; // Set RMS value
+        goodTree->Fill();              // Save event
     }
     goodTree->Write();
     delete goodFile;
@@ -180,9 +192,14 @@ void processEvents(const char *fileName) {
     string badFilePath = outputDir + "/BadEvents.root";
     TFile *badFile = new TFile(badFilePath.c_str(), "RECREATE");
     TTree *badTree = tree->CloneTree(0); // Clone the input tree structure
-    for (const auto &entry : badEvents) {
-        tree->GetEntry(entry);
-        badTree->Fill();
+
+    // Add a new branch for peakPosition_rms
+    badTree->Branch("peakPosition_rms", &peakPosition_rms, "peakPosition_rms/D");
+
+    for (size_t i = 0; i < badEvents.size(); i++) {
+        tree->GetEntry(badEvents[i]); // Load event data
+        peakPosition_rms = badRMS[i]; // Set RMS value
+        badTree->Fill();              // Save event
     }
     badTree->Write();
     delete badFile;
