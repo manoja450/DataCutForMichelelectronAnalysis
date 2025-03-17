@@ -32,7 +32,7 @@ void plot_peakPosition_rms_curve(const char* fileName) {
 
     // Create a histogram with fixed x-axis range (0 to 10)
     const int nBins = 100;
-    TH1D* hist = new TH1D("hist", "Peak Position RMS Distribution After Cut;Peak Position RMS;Events/0.1 RMS", nBins, 0, 10);
+    TH1D* hist = new TH1D("hist", "Peak Position RMS Distribution Good Events;Peak Position RMS;Events/0.1 RMS", nBins, 0, 10);
 
     // Fill the histogram and track the maximum value
     const Long64_t nEntries = tree->GetEntries();
@@ -57,6 +57,12 @@ void plot_peakPosition_rms_curve(const char* fileName) {
     TCanvas* canvas = new TCanvas("canvas", "Peak Position RMS", 800, 600);
     canvas->SetGrid();
 
+    // Set margins for the canvas (left, right, bottom, top)
+canvas->SetLeftMargin(0.15);   // Increase left margin
+canvas->SetRightMargin(0.08);  // Increase right margin
+canvas->SetBottomMargin(0.12); // Increase bottom margin
+canvas->SetTopMargin(0.08);    // Increase top margin
+
     // Enable statistics box
     gStyle->SetOptStat(1111); // Show entries, mean, and RMS
     hist->SetStats(1);        // Ensure statistics box is enabled
@@ -65,7 +71,7 @@ void plot_peakPosition_rms_curve(const char* fileName) {
     hist->GetXaxis()->SetLabelSize(0.04); // Increase x-axis label size
     hist->GetXaxis()->SetTitleSize(0.04); // Increase x-axis title size
     hist->GetYaxis()->SetLabelSize(0.04); // Increase y-axis label size
-    hist->GetYaxis()->SetTitleSize(0.05); // Increase y-axis title size
+    hist->GetYaxis()->SetTitleSize(0.06); // Increase y-axis title size
 
     // Customize histogram appearance
     hist->SetFillColor(kBlue);
