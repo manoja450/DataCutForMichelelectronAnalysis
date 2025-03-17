@@ -9,6 +9,8 @@
 #include <cmath>
 #include <unistd.h>
 #include <sys/stat.h> // For mkdir
+#include <ctime>      // For timestamp
+#include <cstdlib>    // For rand()
 
 using namespace std;
 
@@ -32,6 +34,23 @@ void CalculateMeanAndRMS(const vector<Double_t> &data, Double_t &mean, Double_t 
     rms = sqrt(rms / data.size());
 }
 
+// Function to generate a random directory name
+string generateRandomDirName(const string &baseName) {
+    // Get current timestamp
+    time_t now = time(0);
+    tm *ltm = localtime(&now);
+
+    // Generate a random number
+    int randomNum = rand() % 10000; // Random number between 0 and 9999
+
+    // Create directory name
+    string dirName = baseName + "_Output_" + to_string(1900 + ltm->tm_year) + 
+                     to_string(1 + ltm->tm_mon) + to_string(ltm->tm_mday) + "_" +
+                     to_string(ltm->tm_hour) + to_string(ltm->tm_min) + to_string(ltm->tm_sec) +
+                     "_" + to_string(randomNum);
+    return dirName;
+}
+
 // Main function to process events
 void processEvents(const char *fileName) {
     // Extract the base name of the input file (without the .root extension)
@@ -39,9 +58,15 @@ void processEvents(const char *fileName) {
     size_t lastDot = inputFileName.find_last_of(".");
     string baseName = inputFileName.substr(0, lastDot);
 
-    // Create a directory for output files
-    string outputDir = baseName + "_Output";
-    mkdir(outputDir.c_str(), 0777); // Create the directory
+    // Generate a unique directory name
+    string outputDir = generateRandomDirName(baseName);
+    cout << "Creating output directory: " << outputDir << endl;
+
+    // Create the directory
+    if (mkdir(outputDir.c_str(), 0777)) {
+        cerr << "Error creating directory: " << outputDir << endl;
+        return;
+    }
 
     // Open the input ROOT file
     TFile *file = TFile::Open(fileName);
@@ -49,6 +74,7 @@ void processEvents(const char *fileName) {
         cerr << "Error opening file: " << fileName << endl;
         return;
     }
+    cout << "Opened input file: " << fileName << endl;
 
     // Access the TTree
     TTree *tree = (TTree*)file->Get("tree");
@@ -57,6 +83,7 @@ void processEvents(const char *fileName) {
         file->Close();
         return;
     }
+    cout << "Accessed TTree: tree" << endl;
 
     // Variables to read from the tree
     Int_t eventID;
@@ -91,6 +118,7 @@ void processEvents(const char *fileName) {
 
     // Loop over all events for calibration
     Long64_t nEntries = tree->GetEntries();
+    cout << "Processing " << nEntries << " events for calibration..." << endl;
     for (Long64_t entry=0; entry<nEntries; entry++) {
         tree->GetEntry(entry);
         if (triggerBits != 16) continue; // Apply trigger condition
@@ -143,6 +171,7 @@ void processEvents(const char *fileName) {
     vector<Double_t> goodRMS, badRMS;
 
     // Loop over all events for selection
+    cout << "Processing " << nEntries << " events for selection..." << endl;
     for (Long64_t entry=0; entry<nEntries; entry++) {
         tree->GetEntry(entry);
         bool isGood = false;
@@ -169,17 +198,16 @@ void processEvents(const char *fileName) {
             }
         } 
         else {
-            // Condition B: Pulse Height > 3 * baseline RMS and area/height > 1.2 for all PMTs
-            bool allPassConditionB = true;
+            // New Condition B: Pulse Height > 3 * baseline RMS and area/height > 1.2 for at least 3 PMTs
+            int countConditionB = 0;
             for (int pmt=0; pmt<12; pmt++) {
                 int ch = pmtChannelMap[pmt];
-                if (pulseH[ch] <= 3 * baselineRMS[ch] || (area[ch] / pulseH[ch]) <= 1.0) {
-                    allPassConditionB = false;
-                    break;
+                if (pulseH[ch] > 3 * baselineRMS[ch] && (area[ch] / pulseH[ch]) > 1.2) {
+                    countConditionB++;
                 }
             }
 
-            if (allPassConditionB) {
+            if (countConditionB >= 3) {
                 // Calculate peak position mean and RMS
                 vector<Double_t> peakPositions;
                 for (int pmt=0; pmt<12; pmt++) {
@@ -205,7 +233,13 @@ void processEvents(const char *fileName) {
 
     // Save results
     string goodFilePath = outputDir + "/GoodEvents_" + baseName + ".root";
+    cout << "Saving good events to: " << goodFilePath << endl;
     TFile *goodFile = new TFile(goodFilePath.c_str(), "RECREATE");
+    if (!goodFile || goodFile->IsZombie()) {
+        cerr << "Error creating output file: " << goodFilePath << endl;
+        return;
+    }
+
     TTree *goodTree = tree->CloneTree(0); // Clone the input tree structure
     Double_t peakPosition_rms;
     goodTree->Branch("peakPosition_rms", &peakPosition_rms, "peakPosition_rms/D");
@@ -216,10 +250,17 @@ void processEvents(const char *fileName) {
         goodTree->Fill();              // Save event
     }
     goodTree->Write();
-    delete goodFile;
+    goodFile->Close();
+    cout << "Saved " << goodEvents.size() << " good events." << endl;
 
     string badFilePath = outputDir + "/BadEvents_" + baseName + ".root";
+    cout << "Saving bad events to: " << badFilePath << endl;
     TFile *badFile = new TFile(badFilePath.c_str(), "RECREATE");
+    if (!badFile || badFile->IsZombie()) {
+        cerr << "Error creating output file: " << badFilePath << endl;
+        return;
+    }
+
     TTree *badTree = tree->CloneTree(0); // Clone the input tree structure
     badTree->Branch("peakPosition_rms", &peakPosition_rms, "peakPosition_rms/D");
 
@@ -229,7 +270,8 @@ void processEvents(const char *fileName) {
         badTree->Fill();              // Save event
     }
     badTree->Write();
-    delete badFile;
+    badFile->Close();
+    cout << "Saved " << badEvents.size() << " bad events." << endl;
 
     // Cleanup
     for (int i=0; i<12; i++) delete histArea[i];
