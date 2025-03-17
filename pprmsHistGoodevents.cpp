@@ -62,6 +62,8 @@ canvas->SetLeftMargin(0.15);   // Increase left margin
 canvas->SetRightMargin(0.08);  // Increase right margin
 canvas->SetBottomMargin(0.12); // Increase bottom margin
 canvas->SetTopMargin(0.08);    // Increase top margin
+    // Move Y-axis title closer to the axis
+hist->GetYaxis()->SetTitleOffset(1.2); // Default is 1.2, reduce to bring closer
 
     // Enable statistics box
     gStyle->SetOptStat(1111); // Show entries, mean, and RMS
