@@ -1,4 +1,6 @@
-//This code gives the Histogram of pulseH of PMTs in terms of photoelectrons. We need to provide mu1 values in the code.
+//This code gives the Histogram of pulseH of PMTs in terms of photoelectron. 
+//Also, it gives a  single Histogram of all PMT's pulseH distribution.
+//We need to provide mu1 values in the code.
 #include <iostream>
 #include <TFile.h>
 #include <TTree.h>
@@ -47,10 +49,16 @@ void processPulseHDistributions(const char *fileName) {
     TH1F *histPulseH[12];
     for (int i = 0; i < 12; i++) {
         histPulseH[i] = new TH1F(Form("PMT%d_PulseH", i + 1), 
-                                 Form("PMT %d Pulse Height Distributions in terms of Photoelectrons; Photoelectrons; Events per 0.1 p.e.", i + 1), 
-                                 100, 0, 10);
+                                 Form("PMT %d Pulse Height Distributions in terms of Photoelectrons; Photoelectrons; Events per 0.4 p.e.", i + 1), 
+                                 100, 0, 40);
         histPulseH[i]->SetLineColor(kRed); // Set histogram line color to red
     }
+
+    // Create a single histogram for all events and all channels
+    TH1F *histAllPulseH = new TH1F("All_PulseH", 
+                                   " Pulse Height Distribution of All PMTs; Photoelectrons; Events per 0.4 p.e.", 
+                                   100, 0, 40);
+    histAllPulseH->SetLineColor(kBlue); // Set histogram line color to blue
 
     // Mapping of PMT channels
     int pmtChannelMap[12] = {0, 10, 7, 2, 6, 3, 8, 9, 11, 4, 5, 1};
@@ -63,7 +71,8 @@ void processPulseHDistributions(const char *fileName) {
         for (int pmt = 0; pmt < 12; pmt++) {
             int adcIndex = pmtChannelMap[pmt]; // Map PMT channels
             double pe = pulseH[adcIndex] / mu1[pmt]; // Convert ADC to p.e.
-            histPulseH[pmt]->Fill(pe); // Fill the histogram with pulse height in p.e.
+            histPulseH[pmt]->Fill(pe); // Fill the individual PMT histogram
+            histAllPulseH->Fill(pe);   // Fill the combined histogram
         }
     }
 
@@ -90,7 +99,7 @@ void processPulseHDistributions(const char *fileName) {
         histPulseH[i]->GetYaxis()->SetTitleOffset(1.1); // Adjust this value as needed
 
         // Set title size for individual plots
-        histPulseH[i]->SetTitleSize(0.13, "t"); // "t" for title, size 0.06
+        histPulseH[i]->SetTitleSize(0.18, "t"); // "t" for title, size 0.06
 
         histPulseH[i]->Draw(); // Draw the histogram
         canvas->SaveAs(Form("PMT%d_PulseH_Distribution.png", i + 1)); // Save as PNG
@@ -127,13 +136,13 @@ void processPulseHDistributions(const char *fileName) {
             histPulseH[pmtIndex]->GetYaxis()->SetTitleOffset(1.1); // Adjust this value as needed
 
             // Ensure Y-axis label is visible
-            histPulseH[pmtIndex]->GetYaxis()->SetTitle("Events per 0.1 p.e.");
+            histPulseH[pmtIndex]->GetYaxis()->SetTitle("Events per 0.4 p.e.");
 
             // Ensure X-axis label is visible
             histPulseH[pmtIndex]->GetXaxis()->SetTitle("Photoelectrons");
 
             // Adjust margins for each subplot
-            gPad->SetLeftMargin(0.12);   // Increase left margin
+            gPad->SetLeftMargin(0.15);   // Increase left margin
             gPad->SetRightMargin(0.05); // Adjust right margin
             gPad->SetBottomMargin(0.12); // Increase bottom margin
             gPad->SetTopMargin(0.12);    // Increase top margin to accommodate larger title
@@ -153,16 +162,44 @@ void processPulseHDistributions(const char *fileName) {
     // Save the combined canvas as a PNG file
     masterCanvas->SaveAs("Combined_PMT_PulseH_Distributions.png");
 
+    // Draw and save the combined histogram for all events and all channels
+    TCanvas *allCanvas = new TCanvas("AllCanvas", "Combined Pulse Height Distribution of All PMTs", 800, 600);
+
+    // Adjust margins and text size for better visibility
+    canvas->SetLeftMargin(0.15);   // Increase left margin
+    canvas->SetRightMargin(0.05);  // Adjust right margin
+    canvas->SetBottomMargin(0.15); // Increase bottom margin
+    canvas->SetTopMargin(0.15);    // Adjust top margin
+
+
+    // Adjust x-axis and y-axis title sizes for the combined histogram
+    histAllPulseH->GetXaxis()->SetTitleSize(0.05); // Increase x-axis title size
+    histAllPulseH->GetYaxis()->SetTitleSize(0.05); // Increase y-axis title size
+    histAllPulseH->GetXaxis()->SetLabelSize(0.04); // Increase x-axis label size
+    histAllPulseH->GetYaxis()->SetLabelSize(0.04); // Increase y-axis label size
+
+    // Move Y-axis title closer to the axis
+    histAllPulseH->GetYaxis()->SetTitleOffset(0.9); // Adjust this value as needed
+
+    // Draw the combined histogram
+    histAllPulseH->Draw();
+
+    // Save the combined histogram as a PNG file
+    allCanvas->SaveAs("Combined_All_PMT_PulseH_Distribution.png");
+
     // Clean up
     for (int i = 0; i < 12; i++) {
         delete histPulseH[i];
     }
+    delete histAllPulseH;
     delete canvas;
     delete masterCanvas;
+    delete allCanvas;
     file->Close();
 
     cout << "Pulse height distributions for all events saved as PNG files." << endl;
     cout << "Combined image saved as Combined_PMT_PulseH_Distributions.png" << endl;
+    cout << "Combined histogram for all events and all channels saved as Combined_All_PMT_PulseH_Distribution.png" << endl;
 }
 
 // Main function to handle command-line arguments
