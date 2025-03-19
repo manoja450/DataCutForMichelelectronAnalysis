@@ -109,7 +109,7 @@ void analyzeMuonMichel(TTree *tree, const Double_t *mu1) {
     for(Long64_t entry=0; entry<nEntries; entry++) {
         tree->GetEntry(entry);
         
-        if(triggerBits != 34 && triggerBits != 2) continue;
+        if(triggerBits != 34 && triggerBits != 2 && triggerBits !=32) continue;
 
         // Check PMT hits for muon
         int nPMTsHit = 0;
