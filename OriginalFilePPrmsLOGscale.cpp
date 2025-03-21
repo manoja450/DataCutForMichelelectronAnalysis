@@ -1,5 +1,5 @@
 //This code calculates each event's peak Position RMS and plots the histogram of peak position RMS (of PMTs only). 
-// This code is needed to see the distribution of peak position before the cut, i.e, the distribution of original data. in log y axis
+// This code is needed to see the distribution of peak position before the cut, i.e, the distribution of original data.In log scale
 #include <iostream>
 #include <vector>
 #include <TFile.h>
@@ -124,7 +124,7 @@ void plotPMTPeakRMS(const char* fileName) {
 
     const double maxRMS = *max_element(eventRMS.begin(), eventRMS.end());
     const int numBins = 100; // Fixed number of bins
-    TH1F* hRMS = new TH1F("hRMS", "Peak Position RMS Distribution YES Events; peakPosition RMS; Events/0.1 RMS",
+    TH1F* hRMS = new TH1F("hRMS", "Peak Position RMS Distribution BAD Events; peakPosition RMS; Events/0.1 RMS",
                           numBins, 0, 10);
 
     for (const auto& rms : eventRMS) {
@@ -133,8 +133,27 @@ void plotPMTPeakRMS(const char* fileName) {
 
     // Draw and save
 TCanvas* c = new TCanvas("c", "RMS Distribution", 800, 600);
+
+// Increase margins
+c->SetLeftMargin(0.15);   // Increase left margin
+c->SetRightMargin(0.05);  // Decrease right margin
+c->SetBottomMargin(0.15); // Increase bottom margin
+c->SetTopMargin(0.10);    // Decrease top margin
+
+// Set y-axis to log scale
+c->SetLogy();
+
+// Increase axis title sizes
+hRMS->GetXaxis()->SetTitleSize(0.05); // Increase x-axis title size
+hRMS->GetYaxis()->SetTitleSize(0.05); // Increase y-axis title size
+
+// Draw histogram
 hRMS->SetFillColor(kBlue);
 hRMS->SetFillStyle(3003);
+hRMS->Draw("HIST");
+
+// Save the plot
+c->SaveAs("pmt_peak_rms.png");
 
 // Set y-axis to log scale
 c->SetLogy();
