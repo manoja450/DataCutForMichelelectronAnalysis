@@ -1,4 +1,6 @@
-//This code accepts three input files. And can make an overlayed histogram of three along with individual ones. All events, Good Events, Bad events.
+//This code accepts three input files. 
+//And can make an overlayed histogram of three along with individual ones. All events, Good Events, Bad events.
+//log plot
 #include <iostream>
 #include <vector>
 #include <TFile.h>
