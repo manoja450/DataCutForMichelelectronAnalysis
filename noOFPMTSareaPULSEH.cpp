@@ -5,7 +5,7 @@
  // 2. Reads the "PulseRatios" branch, which stores pulse height ratios for different PMTs.
  // 3. Counts how many PMTs in each event have a PulseRatio greater than 1.
  //4. Creates a stacked histogram where each bin represents the number of PMTs exceeding this threshold.
- //5. Assigns different colours to different bins using multiple histograms in a THStack.
+ //5. Assigns different colors to different bins using multiple histograms in a THStack.
  // 6. Saves the resulting histogram as a PNG file named "PulseRatioHistogram_Pass.png".
  
 #include <iostream>
@@ -41,7 +41,7 @@ void createPulseRatioHistogram(const char *passFileName) {
     const int colors[12] = {kRed, kBlue, kGreen, kMagenta, kCyan, kYellow, kOrange, kViolet, kPink, kSpring, kTeal, kAzure};
 
     for (int i = 0; i < 12; i++) {
-        histBins[i] = new TH1F(Form("bin_%d", i+1), "", 12, 0, 12);
+        histBins[i] = new TH1F(Form("bin_%d", i+1), "", 13, 0, 13);
         histBins[i]->SetFillColor(colors[i]);
         stack->Add(histBins[i]);
     }
