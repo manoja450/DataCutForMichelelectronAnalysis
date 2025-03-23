@@ -1,5 +1,13 @@
-//This program reads a ROOT file containing event data and generates a histogram of PulseRatios of Good events. 
+//This program reads a ROOT file containing event data and generates a histogram  
 // showing the number of PMTs with PulseRatios greater than 1 for good events.
+//The program performs the following steps:
+ /// 1. Opens the specified ROOT file and accesses the TTree named "tree".
+ // 2. Reads the "PulseRatios" branch, which stores pulse height ratios for different PMTs.
+ // 3. Counts how many PMTs in each event have a PulseRatio greater than 1.
+ //4. Creates a stacked histogram where each bin represents the number of PMTs exceeding this threshold.
+ //5. Assigns different colours to different bins using multiple histograms in a THStack.
+ // 6. Saves the resulting histogram as a PNG file named "PulseRatioHistogram_Pass.png".
+ 
 #include <iostream>
 #include <TFile.h>
 #include <TTree.h>
