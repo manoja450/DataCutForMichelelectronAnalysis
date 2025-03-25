@@ -1,4 +1,4 @@
-Michel Electron Analysis Program. It  accepts multiple files.
+*/ Michel Electron Analysis Program. It  accepts multiple files.
  * 
  * Purpose:
  * This code is designed to process PMT (Photomultiplier Tube) data to identify and analyze
@@ -24,12 +24,10 @@ Michel Electron Analysis Program. It  accepts multiple files.
  *     pulseH, area, peakPosition, nsTime, triggerBits
  * 
  * Output:
- * - GoodEvents.root: Selected events passing all cuts
- * - BadEvents.root: Rejected events
  * - AnalysisResults/ directory containing:
  *   • time_difference.png: Muon decay time distribution with fit
  *   • michel_spectrum.png: Michel electron energy spectrum
- *   • analysis_results.root: ROOT file with analysis histograms
+ *  
  * 
  * Physics Context:
  * Michel electrons are produced when cosmic ray muons (μ⁻) decay via:
