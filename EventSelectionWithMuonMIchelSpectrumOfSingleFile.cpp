@@ -1,4 +1,4 @@
-Michel Electron Analysis Program
+Michel Electron Analysis Program (of single root file). It dooesnot accept multiple files.
  * 
  * Purpose:
  * This code is designed to process PMT (Photomultiplier Tube) data to identify and analyze
