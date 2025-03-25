@@ -1,4 +1,44 @@
-#include <iostream>
+Michel Electron Analysis Program. It  accepts multiple files.
+ * 
+ * Purpose:
+ * This code is designed to process PMT (Photomultiplier Tube) data to identify and analyze
+ * Michel electrons resulting from muon decays. It performs three main functions:
+ * 1. Calibrates PMT responses to determine single photoelectron (SPE) spectra
+ * 2. Applies event selection cuts to identify good candidate events
+ * 3. Analyzes muon decay time distributions and Michel electron energy spectra
+ * 
+ * Key Features:
+ * - Automatic SPE calibration using a multi-peak fit function
+ * - Advanced event selection with multiple criteria:
+ *   • Pulse height requirements
+ *   • Peak position consistency checks
+ *   • Signal-to-noise ratio cuts
+ * - Muon lifetime measurement via exponential fitting
+ * - Michel electron energy spectrum analysis
+ * - Automatic output organization with timestamped directories
+ * 
+ * Input:
+ * - ROOT file containing PMT waveform data with the following structure:
+ *   • Tree name: "tree"
+ *   • Required branches: eventID, nSamples, adcVal, baselineMean, baselineRMS,
+ *     pulseH, area, peakPosition, nsTime, triggerBits
+ * 
+ * Output:
+ * - GoodEvents.root: Selected events passing all cuts
+ * - BadEvents.root: Rejected events
+ * - AnalysisResults/ directory containing:
+ *   • time_difference.png: Muon decay time distribution with fit
+ *   • michel_spectrum.png: Michel electron energy spectrum
+ *   • analysis_results.root: ROOT file with analysis histograms
+ * 
+ * Physics Context:
+ * Michel electrons are produced when cosmic ray muons (μ⁻) decay via:
+ * μ⁻ → e⁻ + νₑ + ν̅μ
+ * This code identifies muon stops by large energy deposits, then looks for subsequent
+ * Michel electron signals in the 1-10 μs range, fitting the time difference distribution
+ * to extract the muon lifetime (expected ~2.2 μs at rest).
+ */
+ #include <iostream>
 #include <TFile.h>
 #include <TTree.h>
 #include <TH1F.h>
