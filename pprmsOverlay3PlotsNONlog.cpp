@@ -147,6 +147,12 @@ int main(int argc, char* argv[]) {
         TCanvas* c_combined = new TCanvas("c_combined", "RMS Distribution", 800, 600);
        // c_combined->SetLogy();
 
+       //Set margins (left, right, bottom, top) - values are fractions of the canvas
+c_combined->SetLeftMargin(0.15);    // Increase left margin for y-axis label
+c_combined->SetRightMargin(0.08);   // Right margin
+c_combined->SetBottomMargin(0.12);  // Bottom margin for x-axis label
+c_combined->SetTopMargin(0.08);     // Top margin
+
         // Find maximum y-axis value to set the range
         double maxY = max({h1->GetMaximum(), h2->GetMaximum(), h3->GetMaximum()});
         //h1->SetMaximum(maxY); // Increase range for log scale
