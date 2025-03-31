@@ -1,4 +1,4 @@
-
+//event selection should be done after calibration.And the MUon and michel electron search should be done after the event selection (only on the evnts which passes event selection,either A or B):
 #include <iostream>
 #include <TFile.h>
 #include <TTree.h>
