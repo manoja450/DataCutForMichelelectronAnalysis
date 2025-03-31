@@ -1,3 +1,4 @@
+//event selection should be done after calibration.And the MUon and michel electron search should be done after the event selection (only on the evnts which passes event selection,either A or B):
 #include <iostream>
 #include <TFile.h>
 #include <TTree.h>
@@ -146,8 +147,8 @@ void analyzeMuonMichel(TChain *analysisChain, const Double_t *mu1, const string 
     TH1F *histMichelSpectrum = new TH1F("MichelSpectrum", "Michel Electron Spectrum;Photoelectrons;Events", 90, 100, 1000);
 
     int muonCount = 0, michelCount = 0;
-    const double muonThreshold = 50;
-    const double michelThreshold = 50;
+    const double muonThreshold = 3;
+    const double michelThreshold = 3;
 
     Long64_t nEntries = analysisChain->GetEntries();
     cout << "Analyzing " << nEntries << " events for muon/Michel decays..." << endl;
@@ -204,17 +205,17 @@ void analyzeMuonMichel(TChain *analysisChain, const Double_t *mu1, const string 
         if (!isGood) continue;
 
         // Muon/Michel analysis
-        if(triggerBits != 34 && triggerBits != 2) continue;
+        if(triggerBits != 34) continue;
 
         int nPMTsHit = 0;
         for(int pmt=0; pmt<nPMTs; pmt++) {
-            if(area[pmtChannelMap[pmt]] > 500) nPMTsHit++;
+            if(area[pmtChannelMap[pmt]] > 300) nPMTsHit++;
         }
-        if(nPMTsHit < 3) continue;
+        if(nPMTsHit < 10) continue;
 
         double totalEnergy = 0;
         for(int pmt=0; pmt<nPMTs; pmt++) {
-            if(area[pmtChannelMap[pmt]] > 500 && mu1[pmt] > 0) {
+            if(area[pmtChannelMap[pmt]] > 300 && mu1[pmt] > 0) {
                 totalEnergy += area[pmtChannelMap[pmt]] / mu1[pmt];
             }
         }
@@ -278,13 +279,13 @@ void analyzeMuonMichel(TChain *analysisChain, const Double_t *mu1, const string 
                 
                 int nPMTsHitMichel = 0;
                 for(int pmt=0; pmt<nPMTs; pmt++) {
-                    if(area[pmtChannelMap[pmt]] > 500) nPMTsHitMichel++;
+                    if(area[pmtChannelMap[pmt]] > 300) nPMTsHitMichel++;
                 }
-                if(nPMTsHitMichel < 3) continue;
+                if(nPMTsHitMichel < 10) continue;
                 
                 double michelEnergy = 0;
                 for(int pmt=0; pmt<nPMTs; pmt++) {
-                    if(area[pmtChannelMap[pmt]] > 500 && mu1[pmt] > 0) {
+                    if(area[pmtChannelMap[pmt]] > 300 && mu1[pmt] > 0) {
                         michelEnergy += area[pmtChannelMap[pmt]] / mu1[pmt];
                     }
                 }
