@@ -1,3 +1,7 @@
+//Muon and Michel Electron Analysis Code
+//This code comprehensively analyses cosmic muon events and their subsequent Michel electron decay in a particle detector. The analysis includes:
+//PMT calibration using LED data Muon event selection with SiPM shower rejection
+//Michel electron identification in subsequent events Measurement of muon lifetime from time  differences Energy spectrum analysis of Michel electrons
 #include <iostream>
 #include <TFile.h>
 #include <TTree.h>
