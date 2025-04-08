@@ -1,7 +1,8 @@
 //Muon and Michel Electron Analysis Code
 //This code comprehensively analyses cosmic muon events and their subsequent Michel electron decay in a particle detector. The analysis includes:
 //PMT calibration using LED data Muon event selection with SiPM shower rejection
-//Michel electron identification in subsequent events Measurement of muon lifetime from time  differences Energy spectrum analysis of Michel electrons#include <iostream>
+//Michel electron identification in subsequent events Measurement of muon lifetime from time  differences Energy spectrum analysis of Michel electrons
+#include <iostream>
 #include <TFile.h>
 #include <TTree.h>
 #include <TH1F.h>
@@ -219,7 +220,7 @@ void analyzeMuonMichel(TChain *analysisChain, const Double_t *mu1, const string 
     // Create histograms with adjusted ranges
     TH1F *histDeltaT = new TH1F("DeltaT", 
         "Muon-Michel Time Difference;Time Difference (#mus);Counts/0.1 #mus", 
-        135, 1.5, 15);  // 135 bins from 1.5-15 μs (0.1 μs/bin)
+        135, 1.5, 15);
         
     TH1F *histMichelSpectrum = new TH1F("MichelSpectrum", 
         "Michel Electron Energy;Photoelectrons;Events/10 p.e.", 
@@ -236,6 +237,18 @@ void analyzeMuonMichel(TChain *analysisChain, const Double_t *mu1, const string 
     TH1F *histTriggerBits = new TH1F("TriggerBits", 
         "Trigger Bits Distribution;Trigger Bits;Events", 
         64, 0, 64);
+
+    // Set axis title sizes for all histograms
+    histDeltaT->GetXaxis()->SetTitleSize(0.055);
+    histDeltaT->GetYaxis()->SetTitleSize(0.055);
+    histMichelSpectrum->GetXaxis()->SetTitleSize(0.055);
+    histMichelSpectrum->GetYaxis()->SetTitleSize(0.055);
+    histMuonPMTHits->GetXaxis()->SetTitleSize(0.055);
+    histMuonPMTHits->GetYaxis()->SetTitleSize(0.055);
+    histSiPMMultiplicity->GetXaxis()->SetTitleSize(0.055);
+    histSiPMMultiplicity->GetYaxis()->SetTitleSize(0.055);
+    histTriggerBits->GetXaxis()->SetTitleSize(0.055);
+    histTriggerBits->GetYaxis()->SetTitleSize(0.055);
 
     int muonCount = 0, michelCount = 0;
     int totalTrigger34Events = 0;
@@ -285,7 +298,8 @@ void analyzeMuonMichel(TChain *analysisChain, const Double_t *mu1, const string 
         // Fill PMT multiplicity histogram for all events passing previous cuts
         histMuonPMTHits->Fill(pmtHitCount);
 
-        // Valid muon candidate found (now without PMT multiplicity cut)
+        // Require >10 PMT hits to confirm muon
+        if (pmtHitCount <= 10) continue;
         muonCount++;
         Long64_t muonTime = nsTime;
         
@@ -327,15 +341,32 @@ void analyzeMuonMichel(TChain *analysisChain, const Double_t *mu1, const string 
     cout << "\nANALYSIS SUMMARY:" << endl;
     cout << "Total events processed: " << nEntries << endl;
     cout << "TriggerBits==34 events: " << totalTrigger34Events << endl;
-    cout << "Muon candidates: " << muonCount << endl;
+    cout << "Muon candidates (PMT>10): " << muonCount << endl;
     cout << "Michel electrons: " << michelCount << endl;
     cout << "Michel fraction: " << (muonCount > 0 ? 100.0*michelCount/muonCount : 0) << "%" << endl;
 
-    // Plotting function
+    // Plotting function with adjusted margins and styling
     auto plotHistogram = [&outputDir](TH1F* hist, const string& name, 
                                     const string& title, bool addCutLine = false, 
                                     double cutValue = 0) {
         TCanvas *c = new TCanvas(name.c_str(), title.c_str(), 1200, 800);
+        
+        // Adjust margins: left, right, bottom, top
+        c->SetLeftMargin(0.12);
+        c->SetRightMargin(0.08);
+        c->SetBottomMargin(0.12);
+        c->SetTopMargin(0.08);
+        
+        // Set axis title offsets
+        hist->GetXaxis()->SetTitleOffset(0.9);
+        hist->GetYaxis()->SetTitleOffset(0.9);
+        
+        // Set label sizes
+        hist->GetXaxis()->SetLabelSize(0.04);
+        hist->GetYaxis()->SetLabelSize(0.04);
+        
+        // Draw histogram
+        hist->SetLineWidth(2);
         hist->Draw();
         
         c->SaveAs((outputDir + "/" + name + ".png").c_str());
@@ -344,6 +375,11 @@ void analyzeMuonMichel(TChain *analysisChain, const Double_t *mu1, const string 
 
     // 1. Time difference with lifetime fit
     TCanvas *c1 = new TCanvas("c1", "Time Difference", 1200, 800);
+    c1->SetLeftMargin(0.12);
+    c1->SetRightMargin(0.08);
+    c1->SetBottomMargin(0.12);
+    c1->SetTopMargin(0.08);
+    
     TF1 *decayFit = new TF1("decayFit", DecayFit, 1.5, 15, 2);
     decayFit->SetParameters(histDeltaT->GetMaximum(), 2.2);
     decayFit->SetParLimits(0, 0, histDeltaT->GetMaximum() * 2);
@@ -361,11 +397,16 @@ void analyzeMuonMichel(TChain *analysisChain, const Double_t *mu1, const string 
                     decayFit->GetParError(1)));
     
     histDeltaT->GetListOfFunctions()->Add(pt);
-    histDeltaT->GetXaxis()->SetRangeUser(1.5, 10); // Display 1.5-10 μs
+    histDeltaT->GetXaxis()->SetRangeUser(1.5, 10);
+    histDeltaT->GetXaxis()->SetTitleSize(0.055);
+    histDeltaT->GetYaxis()->SetTitleSize(0.055);
+    histDeltaT->GetXaxis()->SetTitleOffset(0.9);
+    histDeltaT->GetYaxis()->SetTitleOffset(0.9);
+    histDeltaT->SetLineWidth(2);
     histDeltaT->Draw();
     c1->SaveAs((outputDir + "/time_difference.png").c_str());
 
-    // Other plots
+    // Other plots with adjusted styling
     plotHistogram(histMichelSpectrum, "michel_spectrum", "Michel Electron Energy Spectrum");
     plotHistogram(histMuonPMTHits, "muon_pmt_hits", "PMT Multiplicity");
     plotHistogram(histSiPMMultiplicity, "sipm_multiplicity", 
